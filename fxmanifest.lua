@@ -9,9 +9,6 @@ author 'Noverna'
 -- Dont Worry, we will clean this mess up, if its ready to be used.
 
 server_scripts {
-	"@noverna-cache/lib/cache.lua",
-	"@noverna-database/lib/postgres.lua",
-
 	"resource/server/**/*.lua"
 }
 

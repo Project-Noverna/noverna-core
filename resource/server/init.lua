@@ -37,7 +37,7 @@ function NvCore.IsReady()
 end
 
 local function initializeStage4()
-	logger:info("^6[NvCore] Stage 4: Finalization^0")
+	logger:info("^6[Noverna] Stage 4: Finalization^0")
 
 	-- Setze Ready State
 	NvCore._ready = true
@@ -56,12 +56,12 @@ local function initializeStage4()
 	-- Trigger Global Event
 	TriggerEvent("noverna:core:ready")
 
-	logger:info("^2^1[NvCore] Framework Ready!^0")
-	logger:info(string.format("^2[NvCore] Version: %s^0", NvCore.Constants.VERSION))
+	logger:info("^2^1[Noverna] Framework Ready!^0")
+	logger:info(string.format("^2[Noverna] Version: %s^0", NvCore.Constants.VERSION))
 end
 
 local function initializeStage3()
-	logger:info("^6[NvCore] Stage 3: Loading Core Modules^0")
+	logger:info("^6[Noverna] Stage 3: Loading Core Modules^0")
 
 	CreateThread(function()
 		-- Lade Storage Layer
@@ -78,13 +78,13 @@ local function initializeStage3()
 		-- Lade Callback System
 		--require "server.callbacks"
 
-		logger:info("^2[NvCore] Stage 3 Complete^0")
+		logger:info("^2[Noverna] Stage 3 Complete^0")
 		initializeStage4()
 	end)
 end
 
 local function initializeStage2()
-	logger:info("^6[NvCore] Stage 2: Loading Dependencies^0")
+	logger:info("^6[Noverna] Stage 2: Loading Dependencies^0")
 
 	CreateThread(function()
 		local maxRetries = 3
@@ -93,51 +93,65 @@ local function initializeStage2()
 		-- Load Cache mit Retry
 		local cacheLoaded = false
 		for i = 1, maxRetries do
-			local Cache = exports["noverna-cache"]
+			---@class RedisCache
+			local Cache = require '@noverna-cache.lib.cache'
 			if Cache and Cache:isReady() then
 				NvCore.Cache = Cache
 				cacheLoaded = true
-				logger:info("^2[NvCore] Cache loaded successfully^0")
+				logger:info("^2[Noverna] Cache loaded successfully^0")
 				break
 			end
 
 			if i < maxRetries then
-				logger:warn(string.format("^3[NvCore] Cache not ready, retry %d/%d in %dms^0",
+				logger:warn(string.format("^3[Noverna] Cache not ready, retry %d/%d in %dms^0",
 					i, maxRetries, retryDelay))
 				Wait(retryDelay)
 			end
 		end
 
 		if not cacheLoaded then
-			logger:error("^1[NvCore] CRITICAL: Cache failed to load after retries^0")
+			logger:error("^1[Noverna] CRITICAL: Cache failed to load after retries^0")
 			return
 		end
 
 		-- Load Database mit Retry
 		local dbLoaded = false
 		for i = 1, maxRetries do
-			local Database = exports["noverna-database"]
+			---@class Postgres
+			local Database = require '@noverna-database.lib.postgres'
 			if Database and Database:isReady() then
 				NvCore.Database = Database
 				dbLoaded = true
-				logger:info("^2[NvCore] Database loaded successfully^0")
+				logger:info("^2[Noverna] Database loaded successfully^0")
 				break
 			end
 
 			if i < maxRetries then
-				logger:warn(string.format("^3[NvCore] Database not ready, retry %d/%d in %dms^0",
+				logger:warn(string.format("^3[Noverna] Database not ready, retry %d/%d in %dms^0",
 					i, maxRetries, retryDelay))
 				Wait(retryDelay)
 			end
 		end
 
 		if not dbLoaded then
-			logger:error("^1[NvCore] CRITICAL: Database failed to load after retries^0")
+			logger:error("^1[Noverna] CRITICAL: Database failed to load after retries^0")
 			return
 		end
 
+		logger:info("^3[Noverna]^7 Starting database migrations...")
+
+		local MigrationManager = require "resource.server.database.migration"
+
+		local success, executed = MigrationManager:runPendingMigrations()
+
+		if success then
+			logger:info(("^2[Noverna]^7 Database is ready! Executed %d migrations."):format(executed))
+		else
+			logger:info("^1[Noverna]^7 Migration failed! Check logs above.")
+		end
+
 		-- Stage 2 abgeschlossen
-		logger:info("^2[NvCore] Stage 2 Complete^0")
+		logger:info("^2[Noverna] Stage 2 Complete^0")
 		initializeStage3()
 	end)
 end
@@ -172,12 +186,14 @@ end)
 -- Public API: Get Core Object
 --- Shouldn't be used instead use namespaces via ExportManager
 --- example: exports["noverna-core"]:GetNamespace("Constants")
----
---- The Next Example only works if your personal resource uses ox_lib
---- or use the require '@noverna-core.resource.server.init' to get the Core Object, with the Ready Callback
+--- or you just Listen to this event 'noverna:core:ready' it gets called after the onReady Callbacks
 --- @return NvCore
 exports("GetCoreObject", function()
 	return NvCore
+end)
+
+exports("OnReady", function()
+	return NvCore.OnReady
 end)
 
 --[[
@@ -185,11 +201,18 @@ local NvCore = exports["noverna-core"]:GetCoreObject()
 
 -- Warte auf Ready State
 NvCore.OnReady(function()
-  print("Core ist bereit, starte Inventory System")
+  logger:info("Core ist bereit, starte Inventory System")
 
   -- Jetzt sicher Database/Cache nutzen
   local items = NvCore.Database:query("SELECT * FROM items")
 end)
-]]
 
-return NvCore
+or:
+local Core = exports["noverna-core"]:OnReady(function()
+	logger:info("Core ist bereit, starte Inventory System")
+
+  -- Jetzt sicher Database/Cache nutzen
+  local items = NvCore.Database:query("SELECT * FROM items")
+end)
+
+]]

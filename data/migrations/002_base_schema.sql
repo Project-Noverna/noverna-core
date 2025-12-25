@@ -37,8 +37,7 @@ CREATE TABLE whitelist (
   status whitelist_status NOT NULL DEFAULT 'pending',
   reviewed_at TIMESTAMP,
   reviewed_by VARCHAR(50),
-  review_notes TEXT,
-  CONSTRAINT unique_whitelist_user UNIQUE (user_id) WHERE status = 'approved'
+  review_notes TEXT
 );
 
 -- Bans
@@ -54,8 +53,7 @@ CREATE TABLE bans (
   pardoned_at TIMESTAMP,
   expires_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT unique_active_ban UNIQUE (user_id) WHERE pardoned = FALSE
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Characters (Multiple characters per user)
@@ -268,6 +266,10 @@ CREATE INDEX idx_users_identifier ON users(identifier);
 CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_whitelist ON whitelist(user_id, status);
 CREATE INDEX idx_bans_user_id ON bans(user_id);
+
+-- Partial unique indexes (equivalent to unique constraints with WHERE clause)
+CREATE UNIQUE INDEX unique_whitelist_user ON whitelist(user_id) WHERE status = 'approved';
+CREATE UNIQUE INDEX unique_active_ban ON bans(user_id) WHERE pardoned = FALSE;
 
 -- Characters indexes
 CREATE INDEX idx_characters_user_id ON characters(user_id);
