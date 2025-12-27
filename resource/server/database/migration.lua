@@ -146,6 +146,13 @@ end
 ---@param migration {version: string, name: string, filename: string, fullPath: string}
 ---@return boolean success
 function Migration:executeMigration(migration)
+	if not self:validateMigrationChecksum(migration) then
+		logger:info(("^1[Migration]^7 Aborting migration %s due to checksum mismatch"):format(migration.version))
+		-- Idiot safety: Abbruch bei Checksum-Fehler
+		logger:error("Migration checksum mismatch, never in your life touch a already executed migration!")
+		return false
+	end
+
 	logger:info(("^3[Migration]^7 Executing migration %s: %s"):format(migration.version, migration.name))
 
 	local content = self:readMigrationFile(migration.fullPath)
@@ -154,6 +161,7 @@ function Migration:executeMigration(migration)
 	end
 
 	local checksum = self:calculateChecksum(content)
+
 	local startTime = GetGameTimer()
 
 	-- Führe die Migration aus (pg führt automatisch als Transaction aus wenn mehrere Statements)
@@ -320,6 +328,211 @@ function Migration:validateMigrationChecksum(migration)
 	end
 
 	return true
+end
+
+---- Adding Convar Check here:
+local dbCommands = GetConvar("enable_database_commands", "false")
+local environment = GetConvar("environment", "development")
+
+if dbCommands == "true" and environment == "development" then
+	-- I know duplicated message, but we are creating something for the FiveM Community....
+	logger:info("^2[Database] Be aware that database commands are enabled. This should only be used in development environments.^0")
+
+	---Löscht alle Tabellen aus der Datenbank (GEFÄHRLICH!)
+	---@return boolean success
+	---@return string? error
+	function Migration:dropAllTables()
+		logger:warn("^1[Migration]^7 ⚠️  WARNING: Dropping ALL tables from database!")
+
+		if not db:isReady() then
+			return false, "Database is not ready"
+		end
+
+		-- Schritt 1: Alle Tabellennamen aus BEIDEN Schemas abrufen
+		local tablesQuery = [[
+		SELECT schemaname, tablename
+		FROM pg_tables
+		WHERE schemaname IN ('public', 'logs')
+		ORDER BY schemaname, tablename;
+	]]
+
+		local tables, err = db:query(tablesQuery)
+		if err then
+			return false, "Failed to fetch tables: " .. tostring(err)
+		end
+
+		if not tables or #tables == 0 then
+			logger:info("^3[Migration]^7 No tables found to drop")
+			return true
+		end
+
+		logger:info(("^3[Migration]^7 Found %d tables to drop across schemas"):format(#tables))
+
+		-- Schritt 2: DROP CASCADE für jede Tabelle
+		local droppedCount = 0
+		for _, tableRow in ipairs(tables) do
+			local schemaName = tableRow.schemaname
+			local tableName = tableRow.tablename
+			local fullTableName = string.format("%s.%s", schemaName, tableName)
+			local dropQuery = string.format("DROP TABLE IF EXISTS %s CASCADE;", fullTableName)
+
+			logger:info(("^3[Migration]^7 Dropping table: %s"):format(fullTableName))
+
+			local _, dropErr = db:rawQuery(dropQuery)
+			if dropErr then
+				logger:warn(("^1[Migration]^7 Failed to drop table %s: %s"):format(fullTableName, dropErr))
+			else
+				droppedCount = droppedCount + 1
+			end
+		end
+
+		logger:info(("^2[Migration]^7 Successfully dropped %d/%d tables"):format(droppedCount, #tables))
+
+		-- Schritt 3: Lösche alle ENUM Types aus beiden Schemas
+		logger:info("^3[Migration]^7 Dropping ENUM types...")
+		local enumsQuery = [[
+		SELECT n.nspname as schema_name, t.typname as type_name
+		FROM pg_type t
+		JOIN pg_namespace n ON n.oid = t.typnamespace
+		WHERE t.typtype = 'e'
+		AND n.nspname IN ('public', 'logs')
+		ORDER BY n.nspname, t.typname;
+	]]
+
+		local enums, enumErr = db:query(enumsQuery)
+		if not enumErr and enums then
+			for _, enumRow in ipairs(enums) do
+				local fullEnumName = string.format("%s.%s", enumRow.schema_name, enumRow.type_name)
+				local dropEnumQuery = string.format("DROP TYPE IF EXISTS %s CASCADE;", fullEnumName)
+				logger:info(("^3[Migration]^7 Dropping enum: %s"):format(fullEnumName))
+				db:rawQuery(dropEnumQuery)
+			end
+		end
+
+		-- Schritt 4: Lösche alle Functions/Procedures
+		logger:info("^3[Migration]^7 Dropping functions...")
+		local functionsQuery = [[
+		SELECT n.nspname as schema_name, p.proname as function_name,
+		       pg_get_function_identity_arguments(p.oid) as args
+		FROM pg_proc p
+		JOIN pg_namespace n ON n.oid = p.pronamespace
+		WHERE n.nspname IN ('public', 'logs')
+		ORDER BY n.nspname, p.proname;
+	]]
+
+		local functions, funcErr = db:query(functionsQuery)
+		if not funcErr and functions then
+			for _, funcRow in ipairs(functions) do
+				local fullFuncName = string.format("%s.%s(%s)", funcRow.schema_name, funcRow.function_name, funcRow.args or "")
+				local dropFuncQuery = string.format("DROP FUNCTION IF EXISTS %s CASCADE;", fullFuncName)
+				logger:info(("^3[Migration]^7 Dropping function: %s"):format(fullFuncName))
+				db:rawQuery(dropFuncQuery)
+			end
+		end
+
+		-- Schritt 5: Lösche alle Views
+		logger:info("^3[Migration]^7 Dropping views...")
+		local viewsQuery = [[
+		SELECT schemaname, viewname
+		FROM pg_views
+		WHERE schemaname IN ('public', 'logs')
+		ORDER BY schemaname, viewname;
+	]]
+
+		local views, viewErr = db:query(viewsQuery)
+		if not viewErr and views then
+			for _, viewRow in ipairs(views) do
+				local fullViewName = string.format("%s.%s", viewRow.schemaname, viewRow.viewname)
+				local dropViewQuery = string.format("DROP VIEW IF EXISTS %s CASCADE;", fullViewName)
+				logger:info(("^3[Migration]^7 Dropping view: %s"):format(fullViewName))
+				db:rawQuery(dropViewQuery)
+			end
+		end
+
+		-- Schritt 6: Prüfe ob noch Tabellen vorhanden sind
+		local remainingTables, checkErr = db:query(tablesQuery)
+		if checkErr then
+			return false, "Failed to verify table deletion: " .. tostring(checkErr)
+		end
+
+		if remainingTables and #remainingTables > 0 then
+			local tableNames = {}
+			for _, t in ipairs(remainingTables) do
+				table.insert(tableNames, string.format("%s.%s", t.schemaname, t.tablename))
+			end
+			return false, "Some tables could not be dropped: " .. table.concat(tableNames, ", ")
+		end
+
+		logger:info("^2[Migration]^7 All tables, enums, functions and views dropped successfully")
+		return true
+	end
+
+	---Stellt sicher dass benötigte Schemas existieren
+	---@return boolean success
+	---@return string? error
+	function Migration:ensureSchemas()
+		logger:info("^3[Migration]^7 Ensuring required schemas exist...")
+
+		-- Erstelle logs Schema falls nicht vorhanden
+		local createLogsSchema = [[
+		CREATE SCHEMA IF NOT EXISTS logs;
+	]]
+
+		local _, err = db:rawQuery(createLogsSchema)
+		if err then
+			return false, "Failed to create logs schema: " .. tostring(err)
+		end
+
+		logger:info("^2[Migration]^7 Schema 'logs' ensured")
+		logger:info("^2[Migration]^7 Schema 'public' exists by default")
+
+		return true
+	end
+
+	---Setzt die komplette Datenbank zurück und führt Migrationen neu aus
+	---@return boolean success
+	---@return number migrationsRun
+	---@return string? error
+	function Migration:renewDatabase()
+		logger:warn("^1[Migration]^7 ==========================================")
+		logger:warn("^1[Migration]^7 ⚠️  DATABASE RENEW INITIATED")
+		logger:warn("^1[Migration]^7 ⚠️  ALL DATA WILL BE DELETED!")
+		logger:warn("^1[Migration]^7 ==========================================")
+
+		-- Schritt 1: Warte auf Datenbank
+		if not db:awaitReady(15000) then
+			return false, 0, "Database connection timeout"
+		end
+
+		-- Schritt 2: Lösche alle Tabellen
+		logger:info("^3[Migration]^7 Step 1/3: Dropping all tables...")
+		local dropSuccess, dropErr = self:dropAllTables()
+		if not dropSuccess then
+			return false, 0, dropErr
+		end
+
+		-- Schritt 3: Stelle sicher dass benötigte Schemas existieren
+		logger:info("^3[Migration]^7 Step 2/3: Ensuring schemas exist...")
+		local schemaSuccess, schemaErr = self:ensureSchemas()
+		if not schemaSuccess then
+			return false, 0, schemaErr
+		end
+
+		-- Schritt 4: Führe Migrationen neu aus
+		logger:info("^3[Migration]^7 Step 3/3: Running migrations...")
+		local migrationSuccess, migrationsRun = self:runPendingMigrations()
+
+		if not migrationSuccess then
+			return false, migrationsRun, "Migration execution failed"
+		end
+
+		logger:info("^2[Migration]^7 ==========================================")
+		logger:info(("^2[Migration]^7 ✓ DATABASE RENEWED SUCCESSFULLY"))
+		logger:info(("^2[Migration]^7 ✓ Executed %d migrations"):format(migrationsRun))
+		logger:info("^2[Migration]^7 ==========================================")
+
+		return true, migrationsRun
+	end
 end
 
 -- Erstelle globale Instanz

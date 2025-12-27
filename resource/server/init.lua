@@ -4,8 +4,8 @@
 ---@field private _readyCallbacks function[]
 ---@field Functions table
 ---@field Constants table
----@field Database Postgres
----@field Cache RedisCache
+---@field Database? Postgres
+---@field Cache? RedisCache
 NvCore = {
 	_initialized = false,
 	_ready = false,
@@ -138,16 +138,23 @@ local function initializeStage2()
 			return
 		end
 
-		logger:info("^3[Noverna]^7 Starting database migrations...")
+		local dbMigrationsEnabled = GetConvar("database_migrations", "true")
 
-		local MigrationManager = require "resource.server.database.migration"
+		-- Checking if migrations are enabled
+		if (dbMigrationsEnabled == "true") then
+			logger:info("^3[Noverna]^7 Starting database migrations...")
 
-		local success, executed = MigrationManager:runPendingMigrations()
+			local MigrationManager = require "resource.server.database.migration"
 
-		if success then
-			logger:info(("^2[Noverna]^7 Database is ready! Executed %d migrations."):format(executed))
+			local success, executed = MigrationManager:runPendingMigrations()
+
+			if success then
+				logger:info(("^2[Noverna]^7 Database is ready! Executed %d migrations."):format(executed))
+			else
+				logger:info("^1[Noverna]^7 Migration failed! Check logs above.")
+			end
 		else
-			logger:info("^1[Noverna]^7 Migration failed! Check logs above.")
+			logger:info("^3[Noverna]^7 Database migrations are disabled via configuration.")
 		end
 
 		-- Stage 2 abgeschlossen
