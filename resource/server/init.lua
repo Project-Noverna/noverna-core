@@ -67,6 +67,11 @@ local function initializeStage3()
 		-- Lade Storage Layer
 		--require "server.storage.player_storage"
 		--require "server.storage.vehicle_storage"
+		local storageManager = require 'resource.server.storage.init'
+		NvCore.Storage = storageManager
+		-- We will take a look into it, if its better to export each storage individually or to export the whole manager as a namespace
+		-- Or we keep the other export to get single storages and let the user decide
+		NvCore.Exports:RegisterNamespace("Storage", storageManager)
 
 		-- Lade Core Functions
 		--require "server.functions.player"

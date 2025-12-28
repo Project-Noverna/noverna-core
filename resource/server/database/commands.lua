@@ -4,7 +4,7 @@ local environment = GetConvar("environment", "development")
 if dbCommands ~= "true" or environment ~= "development" then return end
 
 local logger = require 'shared.logger'
-local dbMigrations = require 'server.database.migration'
+local dbMigrations = require 'resource.server.database.migration'
 
 logger:info("^2[Database] Be aware that database commands are enabled. This should only be used in development environments.^0")
 

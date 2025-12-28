@@ -15,25 +15,6 @@ Constants.StorageType = {
 	IN_MEMORY = 4,
 }
 
--- Redis Key Patterns (mit Helper Functions)
-Constants.RedisKeys = {
-	-- Templates
-	USER_DATA = "nv:user:%s",                    -- format(license)
-	WHITELIST_DATA = "nv:whitelist:%s",          -- format(license)
-	BAN_DATA = "nv:banlist:%s",                  -- format(license)
-	ACTIVE_CHARACTER = "nv:character:active:%s", -- format(license)
-	CHARACTER_DATA = "nv:character:%s",          -- format(citizenId)
-
-	-- Helper Functions
-	getUserKey = function(license)
-		return string.format(Constants.RedisKeys.USER_DATA, license)
-	end,
-
-	getCharacterKey = function(citizenId)
-		return string.format(Constants.RedisKeys.CHARACTER_DATA, citizenId)
-	end,
-}
-
 -- Database Table Names (zentral verwaltet)
 Constants.Tables = {
 	USERS = "users",
@@ -59,9 +40,9 @@ Constants.Limits = {
 
 -- Timeouts
 Constants.Timeouts = {
-	DATABASE_QUERY = 30000,  -- 30s
-	CACHE_OPERATION = 5000,  -- 5s
-	PLAYER_LOAD = 60000,     -- 60s
+	DATABASE_QUERY = 30000, -- 30s
+	CACHE_OPERATION = 5000, -- 5s
+	PLAYER_LOAD = 60000,  -- 60s
 	RESOURCE_START = 120000, -- 2min
 }
 
@@ -84,9 +65,9 @@ Constants.Performance = {
 	PLAYER_SAVE_INTERVAL = 300000, -- 5min
 
 	-- Cache TTL (seconds)
-	CACHE_TTL_SHORT = 60,         -- 1min
-	CACHE_TTL_MEDIUM = 300,       -- 5min
-	CACHE_TTL_LONG = 3600,        -- 1h
+	CACHE_TTL_SHORT = 60,      -- 1min
+	CACHE_TTL_MEDIUM = 300,    -- 5min
+	CACHE_TTL_LONG = 3600,     -- 1h
 	CACHE_TTL_PERSISTENT = 86400, -- 24h
 
 	-- Batch Sizes
