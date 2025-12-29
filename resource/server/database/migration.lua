@@ -75,6 +75,7 @@ function Migration:loadMigrationFiles()
 	local migrationsPath = ("@%s/%s"):format(resourceName, MIGRATION_PATH)
 
 	-- Lese alle Dateien aus dem Migrations-Verzeichnis
+	---@diagnostic disable-next-line: undefined-field -- No Worries, io.readdir exists in FiveM environment
 	local dirHandle = io.readdir(migrationsPath)
 
 	if not dirHandle then
@@ -242,6 +243,7 @@ function Migration:runPendingMigrations()
 		if self:isMigrationExecuted(migration.version) then
 			logger:info(("^2[Migration]^7 Skipping already executed migration %s: %s"):format(migration.version, migration.name))
 		else
+			---@diagnostic disable-next-line: param-type-mismatch
 			local success = self:executeMigration(migration)
 			if success then
 				executed = executed + 1
@@ -296,6 +298,7 @@ function Migration:createMigration(name)
 	for _, migration in ipairs(migrations) do
 		local version = tonumber(migration.version)
 		if version > lastVersion then
+			---@diagnostic disable-next-line: cast-local-type
 			lastVersion = version
 		end
 	end
