@@ -98,6 +98,11 @@ Constants.ErrorCodes = {
 	CACHE_ERROR = 4000,
 	CACHE_TIMEOUT = 4001,
 	CACHE_MISS = 4002,
+
+	-- Storage
+	STORAGE_NOT_FOUND = 5000,
+	STORAGE_DOES_NOT_EXIST = 5001,
+	STORAGE_CREATION_FAILED = 5002,
 }
 
 -- Make Constants Immutable

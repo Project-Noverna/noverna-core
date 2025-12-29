@@ -184,6 +184,13 @@ local function initializeStage1()
 	--- Initialize Commands
 	-- require "resource.server.commands"
 
+	SetConvarServerInfo("Noverna Version", NvCore.Constants.VERSION)
+	SetConvarServerInfo("Noverna Framework", "Noverna Framework")
+	SetConvarServerInfo("Noverna Author", "Noverna Development Team")
+
+	-- Setting random seed to the session
+	math.randomseed(os.time() ~ os.clock() * 1000000)
+
 	NvCore._initialized = true
 	logger:info("NvCore Stage 1 Initialized.")
 end

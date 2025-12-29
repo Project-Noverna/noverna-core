@@ -102,8 +102,13 @@ function UserStorage:getByUsername(username, options)
 	return result, nil
 end
 
+---@class UserCreatingTable
+---@field username string
+---@field license string
+---@field identifier string
+
 --- Erstellt einen neuen User
----@param data table { username: string, license: string, identifier: string }
+---@param data UserCreatingTable
 ---@return number|nil userId
 ---@return string|nil error
 ---@async

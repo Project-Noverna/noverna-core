@@ -1,0 +1,8 @@
+---@class User
+---@field id integer
+---@field username string
+---@field license string -- License2
+---@field identifier string -- custom Identifier
+---@field last_connection Date -- Last connection date saved in db as TIMESTAMP
+---@field created_at Date -- Creation date saved in db as TIMESTAMP
+---@field updated_at Date -- Last update date saved in db as TIMESTAMP

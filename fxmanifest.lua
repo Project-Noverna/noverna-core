@@ -9,7 +9,8 @@ author 'Noverna'
 -- Dont Worry, we will clean this mess up, if its ready to be used.
 
 server_scripts {
-	"resource/server/**/*.lua"
+	"resource/server/init.lua",
+	"resource/server/events/**/*.lua",
 }
 
 client_scripts {
