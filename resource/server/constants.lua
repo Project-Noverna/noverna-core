@@ -78,31 +78,41 @@ Constants.Performance = {
 
 -- Error Codes (für konsistente Error Handling)
 Constants.ErrorCodes = {
-	-- General
+	-- General (1000-1999)
 	UNKNOWN_ERROR = 1000,
 	VALIDATION_ERROR = 1001,
 	PERMISSION_DENIED = 1002,
+	INVALID_INPUT = 1003,
+	TIMEOUT = 1004,
 
-	-- Player
+	-- Player (2000-2999)
 	PLAYER_NOT_FOUND = 2000,
 	PLAYER_NOT_LOADED = 2001,
 	CHARACTER_NOT_FOUND = 2002,
 	MAX_CHARACTERS_REACHED = 2003,
+	PLAYER_BANNED = 2004,
 
-	-- Database
+	-- Database (3000-3999)
 	DATABASE_ERROR = 3000,
 	QUERY_TIMEOUT = 3001,
 	CONNECTION_LOST = 3002,
+	MIGRATION_FAILED = 3003,
 
-	-- Cache
+	-- Cache (4000-4999)
 	CACHE_ERROR = 4000,
 	CACHE_TIMEOUT = 4001,
 	CACHE_MISS = 4002,
 
-	-- Storage
+	-- Storage (5000-5999)
 	STORAGE_NOT_FOUND = 5000,
-	STORAGE_DOES_NOT_EXIST = 5001,
-	STORAGE_CREATION_FAILED = 5002,
+	STORAGE_NOT_READY = 5001,
+	STORAGE_OPERATION_FAILED = 5002,
+}
+
+Constants.StateBagIdentifier = {
+	USER_SESSION = "user:session_id",
+	IS_PLAYER_LOADED = "isPlayerLoaded",
+	PLAYER_CURRENT_CHARACTER = "currentCharacter",
 }
 
 -- Make Constants Immutable

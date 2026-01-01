@@ -26,13 +26,39 @@ end
 ---@return string|nil error
 ---@async
 function UserStorage:getByLicense(license, options)
+	options = options or {}
+	local cacheKey = self:getCacheKey(license)
+	local ttl = options.ttl or self.config.defaultTTL
+
+	-- Cache prüfen (wenn aktiviert und nicht force DB)
+	if self.config.enableCache and not options.forceDb then
+		local cached = self.cache:get(cacheKey)
+		if cached then
+			return cached, nil
+		end
+	end
+
+	-- Aus Datenbank laden
 	local query = [[
 		SELECT * FROM users
-		WHERE license = :license
+		WHERE license = $1
 	]]
 
-	local params = { license = license }
-	return self:get(license, query, params, options)
+	local result, err = self.db:rawQuery(query, { license })
+	if err then
+		return nil, err
+	end
+
+	if result and result[1] then
+		local userData = result[1]
+		-- Im Cache speichern
+		if self.config.enableCache then
+			self.cache:set(cacheKey, userData, { ex = ttl })
+		end
+		return userData, nil
+	end
+
+	return nil, nil
 end
 
 --- Get the User Account by Identifier
@@ -119,29 +145,29 @@ function UserStorage:createUser(data)
 
 	local query = [[
 		INSERT INTO users (username, license, identifier, last_connection)
-		VALUES (:username, :license, :identifier, NOW())
+		VALUES ($1, $2, $3, NOW())
 		RETURNING id
 	]]
 
-	local params = {
-		username = data.username,
-		license = data.license,
-		identifier = data.identifier,
-	}
+	local result, err = self.db:rawQuery(query, { data.username, data.license, data.identifier })
 
-	local userId, err = self:create(query, params, {
-		identifier = data.license,
-		cacheData = {
+	if err or not result or not result[1] or not result[1].id then
+		logger:error("Failed to create user: " .. (err or "no result"))
+		return nil, err or "no result"
+	end
+
+	local userId = result[1].id
+
+	-- Cache aktualisieren mit der korrekten ID
+	if self.config.enableCache then
+		local cacheKey = self:getCacheKey(data.license)
+		local cacheData = {
 			id = userId,
 			username = data.username,
 			license = data.license,
 			identifier = data.identifier,
-		},
-	})
-
-	if err then
-		logger:error("Failed to create user: " .. err)
-		return nil, err
+		}
+		self.cache:set(cacheKey, cacheData, { ex = self.config.defaultTTL })
 	end
 
 	return userId, nil

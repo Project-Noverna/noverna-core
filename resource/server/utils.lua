@@ -30,7 +30,8 @@ local function generateUserIdentifier(username, options)
 		num = math.floor(num / #charset) + math.random(0, 35)
 	end
 
-	return prefix .. username .. "_" .. table.concat(result)
+	-- Hash the Username to avoid collisions
+	return prefix .. username:lower() .. "_" .. table.concat(result)
 end
 
 --- TODO: We will move this to a Player Utils later
@@ -47,29 +48,6 @@ local function getPlayerLicense(source)
 	return nil
 end
 
---- Possible absolut overkill, but whatever i love it
----
---- Generates a session token with Base64
---- @param byteLength? number Token length in bytes (default: 24, results in 32 chars)
---- @return string Base64-encoded token
-local function generateSessionToken(byteLength)
-	byteLength = byteLength or 24 -- 24 bytes = 32 Base64 chars
-
-	local b64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-	local token = {}
-
-	for i = 1, byteLength do
-		local byte = math.random(0, 255)
-		-- Jedes Byte liefert ~1.3 Base64-Zeichen
-		token[#token + 1] = b64chars:sub((byte & 0xFC) >> 2 | 1, (byte & 0xFC) >> 2 | 1)
-		if i % 3 ~= 0 or i == byteLength then
-			token[#token + 1] = b64chars:sub(((byte & 0x03) << 4) | 1, ((byte & 0x03) << 4) | 1)
-		end
-	end
-
-	return table.concat(token):sub(1, math.ceil(byteLength * 4 / 3))
-end
-
 --- Generates a UUID v4 according to RFC 4122
 --- @return string
 local function generateUUID()
@@ -78,15 +56,44 @@ local function generateUUID()
 
 	return (string.gsub(template, '[xy]', function(c)
 		local v = random(0, 15)
+		-- Für 'x': nehme random value
 		if c == 'x' then
 			return string.format('%x', v)
 		else
 			-- Für 'y': muss im Bereich 8-11 (binär 10xx) liegen
-			-- (v AND 0x3) OR 0x8
-			-- RFC 4122 v4 UUIDs
-			return string.format('%x', (v & 0x3) | 0x8)
+			-- Bits: 10xx wobei xx = random
+			local y = (v & 0x3) | 0x8 -- & 0x3 maskiert nur die letzten 2 bits
+			return string.format('%x', y)
 		end
 	end))
+end
+
+
+--- absolut overkill, but whatever
+---
+--- Generates a session token with Base64
+--- @param byteLength? number Token length in bytes (default: 24, results in 32 chars)
+--- @return string Base64-encoded token
+local function generateSessionToken(byteLength)
+	byteLength = byteLength or 32
+
+	-- Kombiniere mehrere Entropy-Quellen
+	local parts = {
+		tostring(os.time()),
+		tostring(os.clock() * 1000000),
+		generateUUID(),
+		tostring(math.random(1000000, 9999999)),
+	}
+
+	-- Simple aber ausreichende Mischung
+	local combined = table.concat(parts)
+	local hash = 0
+	for i = 1, #combined do
+		hash = ((hash << 5) - hash) + string.byte(combined, i)
+		hash = hash & 0xFFFFFFFF
+	end
+
+	return string.format("%x%s", hash, generateUUID():gsub("-", ""))
 end
 
 return {

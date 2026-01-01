@@ -5,8 +5,8 @@ local constants = require 'resource.server.constants'
 local utils = require 'resource.server.utils'
 local validation = require 'resource.server.validation'
 local logger = require 'shared.logger'
-local GenerateUserIdentifier = utils.GenerateUserIdentifier
-local GetPlayerLicense = utils.GetPlayerLicense
+local GenerateUserIdentifier = utils.generateUserIdentifier
+local GetPlayerLicense = utils.getPlayerLicense
 
 ---@class Deferrals
 ---@field defer fun()
@@ -19,8 +19,16 @@ local GetPlayerLicense = utils.GetPlayerLicense
 ---@param _ fun(reason: string)
 ---@param deferrals Deferrals
 AddEventHandler("playerConnecting", function(playerName, _, deferrals)
-	deferrals.defer()
 	local src = source -- Get the source of the player connecting
+	deferrals.defer()
+	Wait(100)       -- Why?
+
+	if src == nil or src <= 0 then
+		deferrals.done("Invalid player source.")
+		return
+	end
+
+	Player(src).state:set(constants.StateBagIdentifier.USER_SESSION, utils.generateSessionToken(), true) -- Set a session token for the player
 
 	-- Filter out usernames that contains invalid characters or trying to exploit
 	local success, err = validation.validators.username(playerName)
@@ -30,7 +38,7 @@ AddEventHandler("playerConnecting", function(playerName, _, deferrals)
 		return
 	end
 
-	if not storageManager:Has("user") then
+	if not storageManager:Has("user") or not storageManager:Get("penalty") then
 		deferrals.done(("There was an error, its not your fault, contact server administrator. [Error: %d]")
 			:format(constants.ErrorCodes.STORAGE_NOT_FOUND))
 		return
@@ -38,6 +46,9 @@ AddEventHandler("playerConnecting", function(playerName, _, deferrals)
 
 	---@class UserStorage : BaseStorage
 	local userStorage = storageManager:Get("user")
+
+	---@class PenaltyStorage : BaseStorage
+	local penaltyStorage = storageManager:Get("penalty")
 
 	local license = GetPlayerLicense(src)
 
@@ -48,6 +59,7 @@ AddEventHandler("playerConnecting", function(playerName, _, deferrals)
 		return
 	end
 
+	---@class User
 	local userData = userStorage:getByLicense(license)
 
 	if not userData then
@@ -68,9 +80,31 @@ AddEventHandler("playerConnecting", function(playerName, _, deferrals)
 			deferrals.done("Failed to create user account. Please try again later.")
 			return
 		end
+
+		---@class User
+		userData = userStorage:getByLicense(license)
 	end
 
+	if not userData or not userData.id then
+		deferrals.done("Failed to retrieve user data. Please try again later.")
+		logger:debug(("User data is nil or missing id for license '%s - Data: %s'"):format(license, json.encode(userData)))
+		return
+	end
+
+	deferrals.update("Checking penalties...")
+
 	-- Checking if the user is Banned or other checks can be done here
+	local penalty, penaltyErr = penaltyStorage:getActivePenaltyByUserId(userData.id)
+
+	if penaltyErr then
+		deferrals.done("An error occurred while checking penalties. Please try again later.")
+		return
+	end
+
+	if penalty then
+		deferrals.done(("You are banned from this server. Reason: %s"):format(penalty.reason or "No reason specified"))
+		return
+	end
 
 	logger:info(("Player '%s' connected with license '%s'"):format(playerName, license))
 	deferrals.done()

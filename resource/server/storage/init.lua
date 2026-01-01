@@ -7,6 +7,8 @@ local logger = require 'shared.logger'
 local UserStorage = require 'resource.server.storage.user_storage'
 local CharacterStorage = require 'resource.server.storage.character_storage'
 local LogStorage = require 'resource.server.storage.log_storage'
+local PenaltyStorage = require 'resource.server.storage.penalty_storage'
+
 
 logger:info("Initializing storages...")
 
@@ -15,6 +17,9 @@ local success = CreateThread(function()
 	local userStorage = UserStorage:new()
 	local characterStorage = CharacterStorage:new()
 	local logStorage = LogStorage:new()
+	local penaltyStorage = PenaltyStorage:new()
+	-- Warten bis alle Storages bereit sind
+
 
 	if not userStorage:awaitReady(10000) then
 		logger:error("Failed to initialize UserStorage")
@@ -31,9 +36,15 @@ local success = CreateThread(function()
 		return
 	end
 
+	if not penaltyStorage:awaitReady(10000) then
+		logger:error("Failed to initialize PenaltyStorage")
+		return
+	end
+
 	-- Storages registrieren
 	StorageManager:Register('user', userStorage)
 	StorageManager:Register('character', characterStorage)
+	StorageManager:Register('penalty', penaltyStorage)
 
 	-- System relevant storages
 	StorageManager:Register('log', logStorage)

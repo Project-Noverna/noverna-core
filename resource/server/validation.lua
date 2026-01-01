@@ -44,6 +44,54 @@ Validation.validators = {
 		end
 		return true
 	end,
+
+	email = function(value)
+		if type(value) ~= "string" then return false, "Invalid email" end
+		-- Basic email validation
+		if not value:match("^[%w._%+-]+@[%w.-]+%.%w+$") then
+			return false, "Invalid email format"
+		end
+		return true
+	end,
+
+	discord = function(value)
+		if type(value) ~= "string" then return false, "Invalid Discord ID" end
+		-- Discord IDs sind 17-19 Zeichen lange Zahlen
+		if not value:match("^%d{17,19}$") then
+			return false, "Invalid Discord ID format"
+		end
+		return true
+	end,
+
+	url = function(value)
+		if type(value) ~= "string" then return false, "Invalid URL" end
+		if not value:match("^https?://") then
+			return false, "URL must start with http:// or https://"
+		end
+		return true
+	end,
+
+	array = function(value, itemValidator)
+		if type(value) ~= "table" then return false, "Must be array" end
+		for i, item in ipairs(value) do
+			if itemValidator then
+				local valid, err = itemValidator(item)
+				if not valid then
+					return false, string.format("Item %d: %s", i, err)
+				end
+			end
+		end
+		return true
+	end,
+
+	enum = function(value, allowedValues)
+		for _, allowed in ipairs(allowedValues) do
+			if value == allowed then
+				return true
+			end
+		end
+		return false, "Value not in allowed list"
+	end,
 }
 
 -- Schema Validation

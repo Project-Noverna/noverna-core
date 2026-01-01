@@ -19,6 +19,10 @@ function ExportManager:GetNamespace(name)
 	return self.namespaces[name]
 end
 
+exports("RegisterNamespace", function(name, module)
+	ExportManager:RegisterNamespace(name, module)
+end)
+
 exports("GetNamespace", function(name)
 	return ExportManager:GetNamespace(name)
 end)

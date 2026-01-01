@@ -18,6 +18,34 @@ NvCore = {
 
 local logger = require "shared.logger"
 
+local function waitForDependency(name, requirePath, maxRetries, retryDelay)
+	local dependency = nil
+
+	for i = 1, maxRetries do
+		-- Nur einmal laden
+		if not dependency then
+			local success, result = pcall(require, requirePath)
+			if success then
+				dependency = result
+			end
+		end
+
+		-- Prüfe Ready-State
+		if dependency and dependency.isReady and dependency:isReady() then
+			logger:info(string.format("^2[Noverna] %s loaded successfully^0", name))
+			return dependency
+		end
+
+		if i < maxRetries then
+			logger:warn(string.format("^3[Noverna] %s not ready, retry %d/%d in %dms^0",
+				name, i, maxRetries, retryDelay))
+			Wait(retryDelay)
+		end
+	end
+
+	return nil
+end
+
 --- Public API: Warte auf Ready State
 ---@param callback function Callback der aufgerufen wird wenn Core bereit ist
 function NvCore.OnReady(callback)
@@ -42,13 +70,27 @@ local function initializeStage4()
 	-- Setze Ready State
 	NvCore._ready = true
 
-	-- Trigger alle Ready Callbacks
-	for _, callback in ipairs(NvCore._readyCallbacks) do
+	local successCount = 0
+	local failureCount = 0
+
+	for i, callback in ipairs(NvCore._readyCallbacks) do
 		local success, err = pcall(callback)
-		if not success then
-			logger:error("Error in ready callback", { error = err })
+		if success then
+			successCount = successCount + 1
+		else
+			failureCount = failureCount + 1
+			logger:error(string.format("Error in ready callback #%d: %s", i, err))
+
+			-- Optional: Sende Event für Monitoring
+			TriggerEvent("noverna:core:readyCallbackFailed", {
+				index = i,
+				error = err
+			})
 		end
 	end
+
+	logger:info(string.format("^2[Noverna] Ready callbacks completed: %d success, %d failed^0",
+		successCount, failureCount))
 
 	-- Clear Callbacks
 	NvCore._readyCallbacks = {}
@@ -96,49 +138,15 @@ local function initializeStage2()
 		local retryDelay = 5000
 
 		-- Load Cache mit Retry
-		local cacheLoaded = false
-		for i = 1, maxRetries do
-			---@class RedisCache
-			local Cache = require '@noverna-cache.lib.cache'
-			if Cache and Cache:isReady() then
-				NvCore.Cache = Cache
-				cacheLoaded = true
-				logger:info("^2[Noverna] Cache loaded successfully^0")
-				break
-			end
-
-			if i < maxRetries then
-				logger:warn(string.format("^3[Noverna] Cache not ready, retry %d/%d in %dms^0",
-					i, maxRetries, retryDelay))
-				Wait(retryDelay)
-			end
-		end
-
-		if not cacheLoaded then
+		local Cache = waitForDependency("Cache", "@noverna-cache.lib.cache", maxRetries, retryDelay)
+		if not Cache then
 			logger:error("^1[Noverna] CRITICAL: Cache failed to load after retries^0")
 			return
 		end
 
 		-- Load Database mit Retry
-		local dbLoaded = false
-		for i = 1, maxRetries do
-			---@class Postgres
-			local Database = require '@noverna-database.lib.postgres'
-			if Database and Database:isReady() then
-				NvCore.Database = Database
-				dbLoaded = true
-				logger:info("^2[Noverna] Database loaded successfully^0")
-				break
-			end
-
-			if i < maxRetries then
-				logger:warn(string.format("^3[Noverna] Database not ready, retry %d/%d in %dms^0",
-					i, maxRetries, retryDelay))
-				Wait(retryDelay)
-			end
-		end
-
-		if not dbLoaded then
+		local Database = waitForDependency("Database", "@noverna-database.lib.postgres", maxRetries, retryDelay)
+		if not Database then
 			logger:error("^1[Noverna] CRITICAL: Database failed to load after retries^0")
 			return
 		end
@@ -189,7 +197,7 @@ local function initializeStage1()
 	SetConvarServerInfo("Noverna Author", "Noverna Development Team")
 
 	-- Setting random seed to the session
-	math.randomseed(os.time() ~ os.clock() * 1000000)
+	math.randomseed(os.time() + os.clock() * 1000000)
 
 	NvCore._initialized = true
 	logger:info("NvCore Stage 1 Initialized.")
